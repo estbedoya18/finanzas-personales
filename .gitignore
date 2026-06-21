@@ -1,0 +1,15 @@
+.env
+*.pyc
+__pycache__/
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
+credentials.json
+credentials.txt
+token.json
+service-account.json
+service_account.json
+*service-account*.json
+*service_account*.json
