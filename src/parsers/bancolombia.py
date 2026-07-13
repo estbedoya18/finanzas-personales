@@ -1,11 +1,12 @@
 """Parser para correos de alertasynotificaciones@an.notificacionesbancolombia.com.
 
-Maneja los 5 tipos de notificación transaccional identificados:
+Maneja los 6 tipos de notificación transaccional identificados:
   1. Compra con tarjeta (débito o crédito)
   2. Transferencia recibida (con llave)
-  3. Transferencia enviada a cuenta
-  4. Pago con código QR
-  5. Transferencia enviada con Bre-B (a llave)
+  3. Pago de nómina recibido
+  4. Transferencia enviada a cuenta
+  5. Pago con código QR
+  6. Transferencia enviada con Bre-B (a llave)
 """
 
 import re
@@ -48,21 +49,28 @@ class BancolombiaParser(ParserBase):
         re.IGNORECASE,
     )
 
-    # 3. Transferencia enviada a cuenta:
+    # 3. Pago de nómina recibido:
+    # "Recibiste un pago de Nomina de EMPRESA S.A. por $1,234,567.89 en tu cuenta de Ahorros el 10/07/2026 a las 16:42"
+    RE_NOMINA = re.compile(
+        rf"recibiste\s+un\s+pago\s+de\s+n[oó]mina\s+de\s+(.+?)\s+por\s+({_MONTO})\s+en\s+tu\s+cuenta\s+de\s+(.+?)\s+el\s+({_FECHA})\s+a\s+las\s+({_HORA})",
+        re.IGNORECASE,
+    )
+
+    # 4. Transferencia enviada a cuenta:
     # "Transferiste $25,000.00 desde tu cuenta 8401 a la cuenta *3012348018 el 09/06/2026 a las 08:39"
     RE_ENVIADA_CUENTA = re.compile(
         rf"Transferiste\s+({_MONTO})\s+desde\s+tu\s+cuenta\s+\*?(\d+)\s+a\s+la\s+cuenta\s+\*?(\d+)\s+el\s+({_FECHA})\s+a\s+las\s+({_HORA})",
         re.IGNORECASE,
     )
 
-    # 4. Pago QR:
+    # 5. Pago QR:
     # "ESTEBAN BEDOYA MARTINEZ pagaste $12,500.00 por codigo QR desde tu cuenta *8401 a la llave 0092385858 el 09/06/2026 a las 10:46"
     RE_PAGO_QR = re.compile(
         rf"pagaste\s+({_MONTO})\s+por\s+c[oó]digo\s+QR\s+desde\s+tu\s+cuenta\s+\*?(\d+)\s+a\s+la\s+llave\s+(\S+)\s+el\s+({_FECHA})\s+a\s+las\s+({_HORA})",
         re.IGNORECASE,
     )
 
-    # 5. Transferencia enviada con Bre-B a llave:
+    # 6. Transferencia enviada con Bre-B a llave:
     # "transferiste $7,882.00 a la llave @ariza929 desde tu cuenta *8401 a Leidy Diana Ariza Chavarría el 09/06/26 a las 17:42"
     RE_ENVIADA_LLAVE = re.compile(
         rf"transferiste\s+({_MONTO})\s+a\s+la\s+llave\s+(\S+)\s+desde\s+tu\s+cuenta\s+\*?(\d+)\s+a\s+(.+?)\s+el\s+({_FECHA})\s+a\s+las\s+({_HORA})",
@@ -94,6 +102,25 @@ class BancolombiaParser(ParserBase):
                 cuenta=ult4,
                 contraparte=comercio.strip(),
                 referencia=tarjeta,
+                descripcion_raw=texto[:500],
+            )
+
+        if m := self.RE_NOMINA.search(texto):
+            empresa, monto_s, tipo_cuenta, fecha, hora = m.groups()
+            return Transaccion(
+                id_correo=id_correo,
+                fecha_hora=combinar_fecha_hora(
+                    normalizar_fecha(fecha),
+                    normalizar_hora(hora),
+                ),
+                banco=self.banco,
+                tipo="transferencia_recibida",
+                monto=normalizar_monto(monto_s),
+                direccion="entrada",
+                cuenta=tipo_cuenta.strip(),
+                contraparte=empresa.strip(),
+                referencia="Nómina",
+                categoria="Salario",
                 descripcion_raw=texto[:500],
             )
 
