@@ -1,6 +1,7 @@
 """Persistencia de saldos iniciales y calculados en Google Sheets."""
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Iterable
 
 import gspread
@@ -9,6 +10,7 @@ from .clasificacion import CuentaPropia
 from .saldos import SaldoCalculado, SaldoInicial, es_cuenta_con_saldo
 
 
+ZONA_HORARIA = ZoneInfo("America/Bogota")
 HOJA_INICIALES = "saldos_iniciales"
 HOJA_ACTUALES = "saldos_actuales"
 ENCABEZADOS_INICIALES = [
@@ -85,7 +87,7 @@ class SaldosSheets:
                 saldo.saldo_actual,
                 saldo.movimientos,
                 saldo.ultima_transaccion,
-                datetime.now().isoformat(timespec="seconds"),
+                datetime.now(ZONA_HORARIA).strftime("%Y-%m-%d %H:%M:%S"),
             ]
             for saldo in saldos
         ]
