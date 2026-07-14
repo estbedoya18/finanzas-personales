@@ -30,6 +30,28 @@ Las llaves pueden ser celular, correo, documento o identificador alfanumérico. 
 
 La detección automática solo crea instrumentos cuando encuentra un identificador con al menos cuatro dígitos. Descripciones genéricas como `Ahorros`, `Cuenta` o `Corriente` no se consideran cuentas. Las filas genéricas creadas por versiones anteriores deben eliminarse o marcarse con `activo = NO`.
 
+
+## Prototipo de saldos de cuentas
+
+El prototipo calcula únicamente saldos de cuentas de depósito activas. Las tarjetas de crédito y los créditos quedan excluidos.
+
+Al ejecutar el workflow se crean:
+
+- `saldos_iniciales`: una fila por cuenta con saldo. Completa `fecha_corte` y `saldo_inicial` con un valor real consultado en el banco.
+- `saldos_actuales`: resultado generado con saldo inicial, entradas, salidas, movimientos contabilizados y saldo calculado.
+
+La fórmula es:
+
+```
+saldo_calculado = saldo_inicial + entradas - salidas
+```
+
+Para una tarjeta débito, completa `cuenta_asociada` en `cuentas_propias`. Por ejemplo, si la tarjeta `2913` descuenta de la cuenta `8401`, escribe `8401` en esa columna. La compra se descontará de la cuenta, no de un saldo ficticio de la tarjeta.
+
+Tipos incluidos inicialmente: `cuenta`, `cuenta_ahorros`, `cuenta_corriente`, `deposito`, `deposito_electronico`, `billetera` y `efectivo`. `tarjeta_credito` se ignora.
+
+El saldo es estimado porque depende de que los movimientos hayan llegado por correo. Para iniciar de manera confiable, usa un saldo real de hoy y una fecha/hora de corte anterior a los movimientos que deseas sumar o restar.
+
 ## Clasificación
 
 La IA recibe solo tipo, monto, comercio o contraparte y medio de pago; nunca recibe el correo completo, credenciales ni números de cuenta.
