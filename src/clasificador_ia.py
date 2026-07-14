@@ -43,19 +43,20 @@ class ClasificadorIA:
         if not self.disponible:
             return None
 
-        respuesta = self.cliente.responses.create(
-            model=self.modelo,
-            input=[
-                {"role": "system", "content": self._instrucciones()},
-                {
-                    "role": "user",
-                    "content": json.dumps(self._movimiento_minimo(transaccion), ensure_ascii=False),
-                },
-            ],
-            text={"format": self._schema_respuesta()},
-        )
-
         try:
+            respuesta = self.cliente.responses.create(
+                model=self.modelo,
+                input=[
+                    {"role": "system", "content": self._instrucciones()},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            self._movimiento_minimo(transaccion), ensure_ascii=False,
+                        ),
+                    },
+                ],
+                text={"format": self._schema_respuesta()},
+            )
             datos = json.loads(respuesta.output_text)
             resultado = ResultadoClasificacionIA(
                 categoria=datos["categoria"],
@@ -64,7 +65,7 @@ class ClasificadorIA:
                 requiere_revision=datos["requiere_revision"],
                 explicacion=datos["explicacion"],
             )
-        except (AttributeError, KeyError, TypeError, json.JSONDecodeError):
+        except (AttributeError, KeyError, TypeError, json.JSONDecodeError, Exception):
             return None
 
         if not es_clasificacion_valida(resultado.categoria, resultado.subcategoria):
