@@ -23,6 +23,7 @@ HOJA_PENDIENTES = "pendientes_revision"
 
 ENCABEZADOS_CUENTAS = [
     "identificador", "banco", "nombre", "tipo", "rol", "alias", "llaves", "activo",
+    "cuenta_asociada", "moneda",
 ]
 ENCABEZADOS_REGLAS = [
     "patron", "campo", "categoria", "subcategoria", "naturaleza", "prioridad", "activo",
@@ -149,7 +150,10 @@ class SheetsClient:
                 continue
             referencia = (tx.referencia or "").lower()
             tipo = "tarjeta_credito" if "cred" in referencia else "tarjeta_debito" if "deb" in referencia else "cuenta"
-            nuevas.append([identificador, tx.banco, f"{tx.banco} *{identificador}", tipo, "sin_definir", "", "", "SI"])
+            nuevas.append([
+                identificador, tx.banco, f"{tx.banco} *{identificador}",
+                tipo, "sin_definir", "", "", "SI", "", "COP",
+            ])
             existentes.add(identificador)
         if nuevas:
             hoja.append_rows(nuevas, value_input_option="USER_ENTERED")
@@ -166,6 +170,8 @@ class SheetsClient:
                 alias=str(fila.get("alias", "")),
                 llaves=str(fila.get("llaves", "")),
                 activo=str(fila.get("activo", "SI")).upper() != "NO",
+                cuenta_asociada=str(fila.get("cuenta_asociada", "")).strip(),
+                moneda=str(fila.get("moneda", "COP")).strip() or "COP",
             )
             for fila in filas if str(fila.get("identificador", "")).strip()
         ]
