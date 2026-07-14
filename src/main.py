@@ -73,7 +73,7 @@ def procesar() -> int:
 
     ia = ClasificadorIA()
     if not ia.disponible:
-        log.warning("OPENAI_API_KEY no configurada: se dejarán pendientes de IA sin llamada externa")
+        log.warning("OPENAI_API_KEY no configurada: se dejarán como sin_ia sin llamada externa")
 
     clasificador = ClasificadorFinanciero(
         sheets.obtener_cuentas_propias(),
