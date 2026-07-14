@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Iterable, Optional
 
 from .clasificacion import CuentaPropia
-from .cuentas import coincide_identificador
+from .cuentas import coincide_identificador, es_descripcion_generica
 from .modelo import Transaccion
 
 
@@ -44,7 +44,11 @@ class SaldoCalculado:
 
 
 def es_cuenta_con_saldo(cuenta: CuentaPropia) -> bool:
-    return cuenta.activo and cuenta.tipo.strip().lower() in TIPOS_CON_SALDO
+    return (
+        cuenta.activo
+        and cuenta.tipo.strip().lower() in TIPOS_CON_SALDO
+        and not es_descripcion_generica(cuenta.identificador)
+    )
 
 
 class CalculadorSaldos:
