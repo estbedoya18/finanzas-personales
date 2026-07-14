@@ -30,3 +30,7 @@ def test_reconoce_llave_dentro_del_texto_bancario():
         "Transferencia Bre-B enviada a la llave @lulo-abcd",
         conocidos,
     )
+    assert not coincide_identificador(
+        "Transferencia recibida desde Lulo Bank",
+        ["Lulo"],
+    )
