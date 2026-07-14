@@ -1,26 +1,43 @@
-# Base contable
+# Base contable y clasificación con IA
 
-El proceso conserva la hoja `transacciones` e incorpora seis columnas nuevas:
+El proceso conserva la hoja `transacciones` y agrega columnas de trazabilidad:
 
 ```
 naturaleza | subcategoria | cuenta_destino | transferencia_id |
-clasificado_por | confianza_clasificacion
+clasificado_por | confianza_clasificacion | estado_revision |
+categoria_sugerida | subcategoria_sugerida | explicacion_clasificacion
 ```
 
-Al ejecutar el flujo se crean automáticamente estas hojas:
+Al ejecutar el workflow se crean automáticamente, dentro del mismo Google Sheets:
 
-- **cuentas_propias**: instrumentos detectados en `transacciones`. Completa `alias` o `llaves` con valores separados por `|` para reconocer destinos propios que el correo no identifica por terminación de cuenta.
-- **reglas_categorias**: reglas de clasificación. Cada regla usa un patrón de texto (admite expresiones regulares), el campo donde debe buscarlo, categoría, subcategoría, naturaleza, prioridad y si está activa.
+- **cuentas_propias**: instrumentos detectados en el historial.
+- **catalogo_categorias**: categorías y subcategorías permitidas por la IA.
+- **reglas_categorias**: memoria de correcciones manuales; no necesitas llenarla comercio por comercio.
+- **pendientes_revision**: movimientos cuya clasificación requiere confirmación.
 
-## Naturalezas
+## Clasificación
 
-- `ingreso`: dinero que entra desde una contraparte externa.
-- `gasto`: consumo o pago hacia una contraparte externa.
-- `interno`: movimiento entre instrumentos propios. No participa en los totales de ingreso o gasto.
-- `pendiente`: movimiento aún no clasificable.
+La IA recibe solo tipo, monto, comercio o contraparte y medio de pago; nunca recibe el correo completo, credenciales ni números de cuenta.
 
-## Transferencias internas
+El catálogo inicial incluye Alimentación, Transporte, Vivienda y servicios, Salud, Educación, Suscripciones, Ocio, Compras personales, Mascotas, Obligaciones financieras, Comisiones e impuestos, Otros gastos e Ingresos.
 
-Una salida se marca como interna cuando la referencia o contraparte coincide con una cuenta, alias o llave de `cuentas_propias`. Si existe una entrada del mismo valor en la cuenta destino hasta 48 horas después, ambas filas reciben el mismo `transferencia_id`.
+Reglas relevantes:
 
-Las filas con una categoría existente antes de esta actualización se preservan como `clasificado_por = manual`; las reglas automáticas no las sobrescriben.
+- ICETEX → **Obligaciones financieras / Crédito educativo**.
+- ADDI → **Obligaciones financieras / Compra financiada**.
+- Una tarjeta de crédito se trata como obligación; las compras ya registradas no se duplican al pagarla.
+- Las transferencias entre cuentas propias se marcan como `interno` y no entran en ingresos o gastos.
+
+La IA devuelve una respuesta estructurada. Si la confianza no es alta o el comercio es ambiguo, la transacción queda como `Pendiente de revisar`, conservando la categoría sugerida.
+
+## Configuración opcional
+
+Agrega estos secretos en GitHub Actions cuando quieras activar IA y avisos:
+
+- `OPENAI_API_KEY`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+
+Sin `OPENAI_API_KEY`, el flujo sigue funcionando y marca las clasificaciones como `sin_ia`.
+
+Para reprocesar el histórico con IA, ejecuta manualmente el workflow y activa el parámetro **reclasificar_historico**. Esto debe hacerse de forma consciente porque realiza llamadas adicionales a la API.
