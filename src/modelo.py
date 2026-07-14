@@ -1,6 +1,6 @@
 """Modelo de datos para una transacción normalizada."""
 
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
@@ -9,18 +9,38 @@ from typing import Optional
 class Transaccion:
     """Una transacción financiera normalizada, lista para escribirse al Sheet."""
 
-    id_correo: str                 # Gmail message ID (clave para deduplicación)
-    fecha_hora: str                # ISO 8601: 2026-06-09T17:09:00
-    banco: str                     # Bancolombia | Lulo | Nu | Nequi
-    tipo: str                      # compra | transferencia_enviada | transferencia_recibida | pago_qr | pago_pse
-    monto: float                   # siempre positivo
-    direccion: str                 # entrada | salida
-    cuenta: str                    # últimos dígitos de la cuenta propia
-    contraparte: str               # comercio, persona o entidad
-    descripcion_raw: str           # texto crudo original
-    referencia: Optional[str] = None     # llave Bre-B, ID transacción, número de comprobante, etc.
-    categoria: Optional[str] = None      # se llena después, manual o auto
+    id_correo: str
+    fecha_hora: str
+    banco: str
+    tipo: str
+    monto: float
+    direccion: str
+    cuenta: str
+    contraparte: str
+    descripcion_raw: str
+    referencia: Optional[str] = None
+    categoria: Optional[str] = None
     procesado_en: str = field(default_factory=lambda: datetime.now().isoformat())
+
+    # Campos contables añadidos sin alterar la estructura original de la hoja.
+    naturaleza: Optional[str] = None
+    subcategoria: Optional[str] = None
+    cuenta_destino: Optional[str] = None
+    transferencia_id: Optional[str] = None
+    clasificado_por: Optional[str] = None
+    confianza_clasificacion: Optional[str] = None
+
+    # Solo se usa al leer una fila ya existente del Sheet.
+    fila_sheet: int = field(default=0, repr=False, compare=False)
+    requiere_actualizacion: bool = field(default=False, repr=False, compare=False)
+
+    def asignar(self, **campos: Optional[str]) -> None:
+        """Actualiza campos contables y registra que una fila existente debe guardarse."""
+        for campo, valor in campos.items():
+            if getattr(self, campo) != valor:
+                setattr(self, campo, valor)
+                if self.fila_sheet:
+                    self.requiere_actualizacion = True
 
     def to_row(self) -> list:
         """Convierte la transacción a una fila plana para Google Sheets."""
@@ -37,6 +57,12 @@ class Transaccion:
             self.categoria or "",
             self.descripcion_raw,
             self.procesado_en,
+            self.naturaleza or "",
+            self.subcategoria or "",
+            self.cuenta_destino or "",
+            self.transferencia_id or "",
+            self.clasificado_por or "",
+            self.confianza_clasificacion or "",
         ]
 
     @staticmethod
@@ -44,5 +70,7 @@ class Transaccion:
         return [
             "id_correo", "fecha_hora", "banco", "tipo", "monto", "direccion",
             "cuenta", "contraparte", "referencia", "categoria",
-            "descripcion_raw", "procesado_en",
+            "descripcion_raw", "procesado_en", "naturaleza", "subcategoria",
+            "cuenta_destino", "transferencia_id", "clasificado_por",
+            "confianza_clasificacion",
         ]
