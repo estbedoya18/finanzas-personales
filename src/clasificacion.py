@@ -19,6 +19,8 @@ class CuentaPropia:
     alias: str = ""
     llaves: str = ""
     activo: bool = True
+    cuenta_asociada: str = ""
+    moneda: str = "COP"
 
     def coincidencias(self) -> set[str]:
         valores = [
