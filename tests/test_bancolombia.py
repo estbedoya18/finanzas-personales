@@ -53,6 +53,26 @@ def test_transferencia_recibida():
     print("✓ transferencia recibida")
 
 
+def test_pago_nomina():
+    asunto = "Alertas y Notificaciones"
+    cuerpo = (
+        "Bancolombia: Recibiste un pago de Nómina de EMPRESA DE PRUEBA S.A. "
+        "por $1,234,567.89 en tu cuenta de Ahorros el 10/07/2026 a las 16:42. "
+        "Si tienes dudas, llámanos."
+    )
+    tx = parser.parsear("test-nomina", asunto, cuerpo)
+    assert tx is not None
+    assert tx.tipo == "transferencia_recibida"
+    assert tx.monto == 1234567.89
+    assert tx.direccion == "entrada"
+    assert tx.cuenta == "Ahorros"
+    assert tx.contraparte == "EMPRESA DE PRUEBA S.A."
+    assert tx.referencia == "Nómina"
+    assert tx.categoria == "Salario"
+    assert tx.fecha_hora.startswith("2026-07-10T16:42")
+    print("✓ pago de nómina")
+
+
 def test_transferencia_enviada_a_cuenta():
     asunto = "Alertas y Notificaciones Bancolombia"
     cuerpo = "Bancolombia: Transferiste $25,000.00 desde tu cuenta 8401 a la cuenta *3012348018 el 09/06/2026 a las 08:39. ¿Dudas? Llamanos al 018000931987."
@@ -102,6 +122,7 @@ if __name__ == "__main__":
     test_compra()
     test_compra_credito_cop()
     test_transferencia_recibida()
+    test_pago_nomina()
     test_transferencia_enviada_a_cuenta()
     test_pago_qr()
     test_transferencia_brepb_a_llave()
