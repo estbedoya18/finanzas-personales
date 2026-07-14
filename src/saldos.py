@@ -70,7 +70,7 @@ class CalculadorSaldos:
         for tx in transacciones:
             cuenta = self._cuenta_contable(tx.cuenta)
             if cuenta is None:
-                if tx.tipo != "compra" or not self._es_credito(tx.cuenta):
+                if not self._es_credito(tx.cuenta):
                     no_mapeados += 1
                 continue
 
