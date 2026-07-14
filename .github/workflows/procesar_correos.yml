@@ -2,9 +2,14 @@ name: Procesar correos de transacciones
 
 on:
   schedule:
-    # Cada 15 minutos. Ajustable según necesidad.
     - cron: "*/15 * * * *"
-  workflow_dispatch:  # permite correrlo manualmente desde la pestaña Actions
+  workflow_dispatch:
+    inputs:
+      reclasificar_historico:
+        description: "Volver a consultar con IA las transacciones históricas no manuales"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   procesar:
@@ -31,4 +36,9 @@ jobs:
           GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
           SHEET_ID: ${{ secrets.SHEET_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RECLASIFICAR_HISTORICO: ${{ github.event.inputs.reclasificar_historico || 'false' }}
         run: python -m src.main
