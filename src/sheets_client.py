@@ -9,6 +9,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 from .categorias import filas_catalogo
+from .cuentas import es_identificador_detectable
 from .clasificacion import CuentaPropia, ReglaCategoria
 from .modelo import Transaccion
 
@@ -144,7 +145,7 @@ class SheetsClient:
         nuevas = []
         for tx in transacciones:
             identificador = (tx.cuenta or "").strip()
-            if not identificador or identificador in existentes:
+            if not es_identificador_detectable(identificador) or identificador in existentes:
                 continue
             referencia = (tx.referencia or "").lower()
             tipo = "tarjeta_credito" if "cred" in referencia else "tarjeta_debito" if "deb" in referencia else "cuenta"
