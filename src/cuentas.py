@@ -49,6 +49,10 @@ def coincide_identificador(valor: str, conocidos: Iterable[str]) -> bool:
             continue
         if candidato == normalizado:
             return True
-        if len(normalizado) >= 4 and normalizado in candidato:
+        es_numero = normalizado.isdigit() and len(normalizado) >= 4
+        es_llave_explicita = len(normalizado) >= 6 and (
+            "@" in conocido or "*" in conocido
+        )
+        if (es_numero or es_llave_explicita) and normalizado in candidato:
             return True
     return False
