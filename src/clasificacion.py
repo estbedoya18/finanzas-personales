@@ -160,6 +160,8 @@ class ClasificadorFinanciero:
 
     @staticmethod
     def _es_clasificacion_manual(tx: Transaccion) -> bool:
+        if tx.clasificado_por in {"ia", "regla", "sistema"}:
+            return False
         if tx.categoria and tx.categoria not in {"Sin clasificar", "Pendiente de revisar"}:
             tx.asignar(
                 clasificado_por="manual",
