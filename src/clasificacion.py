@@ -5,6 +5,7 @@ from datetime import datetime
 import re
 from typing import Iterable, Optional
 
+from .cuentas import coincide_identificador, separar_identificadores
 from .modelo import Transaccion
 
 
@@ -18,10 +19,16 @@ class CuentaPropia:
     alias: str = ""
     llaves: str = ""
     activo: bool = True
+    cuenta_asociada: str = ""
+    moneda: str = "COP"
 
     def coincidencias(self) -> set[str]:
-        valores = [self.identificador, *self.alias.split("|"), *self.llaves.split("|")]
-        return {_normalizar_identificador(valor) for valor in valores if valor.strip()}
+        valores = [
+            self.identificador,
+            *separar_identificadores(self.alias),
+            *separar_identificadores(self.llaves),
+        ]
+        return {valor for valor in valores if valor.strip()}
 
 
 @dataclass(frozen=True)
@@ -35,20 +42,8 @@ class ReglaCategoria:
     activo: bool = True
 
 
-def _normalizar_identificador(valor: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", (valor or "").lower())
-
-
 def _coincide(valor: str, cuenta: CuentaPropia) -> bool:
-    candidato = _normalizar_identificador(valor)
-    if not candidato:
-        return False
-    for conocido in cuenta.coincidencias():
-        if conocido == candidato:
-            return True
-        if conocido.isdigit() and len(conocido) >= 4 and candidato.endswith(conocido):
-            return True
-    return False
+    return coincide_identificador(valor, cuenta.coincidencias())
 
 
 class ClasificadorFinanciero:
@@ -97,25 +92,41 @@ class ClasificadorFinanciero:
 
     def _marcar_transferencias_explicitas(self, transacciones: list[Transaccion]) -> None:
         for tx in transacciones:
-            if tx.tipo != "transferencia_enviada":
+            if tx.tipo not in {"transferencia_enviada", "transferencia_recibida"}:
                 continue
-            destino = self._buscar_cuenta_destino(tx)
-            if destino is None:
+            contraparte = self._buscar_cuenta_en_contraparte(tx)
+            if contraparte is None:
                 continue
+
+            if tx.tipo == "transferencia_enviada":
+                cuenta_destino = contraparte.identificador
+                subcategoria = contraparte.nombre or contraparte.identificador
+            else:
+                destino = self._cuenta_del_movimiento(tx)
+                cuenta_destino = destino.identificador if destino else tx.cuenta
+                subcategoria = f"Desde {contraparte.nombre or contraparte.identificador}"
+
             tx.asignar(
                 naturaleza="interno",
                 categoria="Transferencia interna",
-                subcategoria=destino.nombre or destino.identificador,
-                cuenta_destino=destino.identificador,
+                subcategoria=subcategoria,
+                cuenta_destino=cuenta_destino,
                 transferencia_id=f"interna:{tx.id_correo}",
                 clasificado_por="sistema",
                 confianza_clasificacion="alta",
                 estado_revision="resuelto",
             )
 
-    def _buscar_cuenta_destino(self, tx: Transaccion) -> Optional[CuentaPropia]:
+    def _cuenta_del_movimiento(self, tx: Transaccion) -> Optional[CuentaPropia]:
+        return next(
+            (cuenta for cuenta in self.cuentas if _coincide(tx.cuenta, cuenta)),
+            None,
+        )
+
+    def _buscar_cuenta_en_contraparte(self, tx: Transaccion) -> Optional[CuentaPropia]:
+        cuenta_movimiento = self._cuenta_del_movimiento(tx)
         for cuenta in self.cuentas:
-            if cuenta.identificador == tx.cuenta:
+            if cuenta_movimiento and cuenta.identificador == cuenta_movimiento.identificador:
                 continue
             if _coincide(tx.referencia or "", cuenta) or _coincide(tx.contraparte, cuenta):
                 return cuenta
@@ -123,7 +134,7 @@ class ClasificadorFinanciero:
 
     def _emparejar_transferencias(self, transacciones: list[Transaccion]) -> None:
         salidas = [tx for tx in transacciones if tx.tipo == "transferencia_enviada" and tx.naturaleza == "interno"]
-        entradas = [tx for tx in transacciones if tx.tipo == "transferencia_recibida" and tx.naturaleza != "interno"]
+        entradas = [tx for tx in transacciones if tx.tipo == "transferencia_recibida"]
 
         for salida in salidas:
             for entrada in entradas:

@@ -9,6 +9,8 @@ from .clasificador_ia import ClasificadorIA
 from .gmail_client import GmailClient
 from .notificador_telegram import NotificadorTelegram
 from .parsers import PARSERS
+from .saldos import CalculadorSaldos
+from .saldos_sheets import SaldosSheets
 from .sheets_client import SheetsClient
 
 
@@ -24,6 +26,8 @@ def procesar() -> int:
     gmail = GmailClient()
     sheets = SheetsClient()
     sheets.preparar_estructura()
+    saldos_sheets = SaldosSheets(sheets.spreadsheet)
+    saldos_sheets.preparar_estructura()
 
     existentes = sheets.cargar_transacciones()
     sheets.aplicar_decisiones_pendientes(existentes)
@@ -64,6 +68,8 @@ def procesar() -> int:
 
     todas = [*existentes, *nuevas]
     sheets.sincronizar_cuentas_detectadas(todas)
+    cuentas = sheets.obtener_cuentas_propias()
+    saldos_sheets.sincronizar_cuentas(cuentas)
     ids_permitidos_ia = {tx.id_correo for tx in nuevas}
     if _reclasificar_historico():
         ids_permitidos_ia.update(
@@ -76,7 +82,7 @@ def procesar() -> int:
         log.warning("OPENAI_API_KEY no configurada: se dejarán como sin_ia sin llamada externa")
 
     clasificador = ClasificadorFinanciero(
-        sheets.obtener_cuentas_propias(),
+        cuentas,
         sheets.obtener_reglas_categorias(),
         clasificador_ia=ia,
     )
@@ -87,6 +93,18 @@ def procesar() -> int:
     insertadas = sheets.insertar(nuevas)
     pendientes_nuevas = [tx for tx in nuevas if tx.estado_revision == "pendiente"]
     sheets.sincronizar_pendientes(todas)
+
+    calculador_saldos = CalculadorSaldos(
+        cuentas, saldos_sheets.cargar_iniciales(),
+    )
+    saldos_actuales, movimientos_no_mapeados = calculador_saldos.calcular(todas)
+    saldos_guardados = saldos_sheets.guardar_actuales(saldos_actuales)
+    log.info(
+        "Saldos: %d cuentas calculadas, %d sin saldo inicial, %d movimientos no mapeados",
+        saldos_guardados,
+        len(calculador_saldos.cuentas_sin_saldo_inicial()),
+        movimientos_no_mapeados,
+    )
 
     if pendientes_nuevas:
         enviado = NotificadorTelegram().notificar_pendientes(
