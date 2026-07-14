@@ -71,6 +71,8 @@ class SheetsClient:
 
     def _asegurar_encabezados(self, hoja, encabezados: list[str]) -> None:
         actuales = hoja.row_values(1)
+        if getattr(hoja, "col_count", 0) < len(encabezados):
+            hoja.resize(cols=len(encabezados))
         if not actuales:
             hoja.append_row(encabezados)
             return
