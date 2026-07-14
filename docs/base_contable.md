@@ -15,6 +15,21 @@ Al ejecutar el workflow se crean automáticamente, dentro del mismo Google Sheet
 - **reglas_categorias**: memoria de correcciones manuales; no necesitas llenarla comercio por comercio.
 - **pendientes_revision**: movimientos cuya clasificación requiere confirmación.
 
+
+## Cuentas propias y llaves Bre-B
+
+La hoja `cuentas_propias` usa una fila por cuenta o producto financiero real. Una misma cuenta puede tener varias llaves Bre-B: se escriben en la columna `llaves` separadas por `|`. También pueden usarse coma, punto y coma o salto de línea.
+
+Ejemplo conceptual:
+
+```
+7353 | Lulo Bank | Lulo ahorro | cuenta | ahorro | Lulo | llave-1|llave-2 | SI
+```
+
+Las llaves pueden ser celular, correo, documento o identificador alfanumérico. El motor las reconoce incluso cuando aparecen dentro de una frase del correo. Las transferencias enviadas o recibidas que relacionen dos cuentas propias se clasifican como `interno`.
+
+La detección automática solo crea instrumentos cuando encuentra un identificador con al menos cuatro dígitos. Descripciones genéricas como `Ahorros`, `Cuenta` o `Corriente` no se consideran cuentas. Las filas genéricas creadas por versiones anteriores deben eliminarse o marcarse con `activo = NO`.
+
 ## Clasificación
 
 La IA recibe solo tipo, monto, comercio o contraparte y medio de pago; nunca recibe el correo completo, credenciales ni números de cuenta.
