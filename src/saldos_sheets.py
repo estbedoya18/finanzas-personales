@@ -65,7 +65,7 @@ class SaldosSheets:
             try:
                 iniciales.append(SaldoInicial(
                     cuenta=cuenta,
-                    fecha_corte=datetime.fromisoformat(fecha),
+                    fecha_corte=self._fecha(fecha),
                     saldo=self._monto(saldo),
                 ))
             except (TypeError, ValueError):
@@ -112,14 +112,28 @@ class SaldosSheets:
         return hoja
 
     @staticmethod
+    def _fecha(valor: str) -> datetime:
+        for formato in (None, "%d/%m/%Y", "%d/%m/%Y %H:%M", "%Y-%m-%d"):
+            try:
+                if formato is None:
+                    return datetime.fromisoformat(valor)
+                return datetime.strptime(valor, formato)
+            except ValueError:
+                continue
+        raise ValueError(f"Fecha de corte inválida: {valor}")
+
+    @staticmethod
     def _monto(valor) -> float:
         if isinstance(valor, (int, float)):
             return float(valor)
         texto = str(valor).strip().replace("$", "").replace(" ", "")
         if "," in texto and "." in texto:
             texto = texto.replace(".", "").replace(",", ".")
-        elif texto.count(".") > 1:
-            texto = texto.replace(".", "")
+        elif "." in texto:
+            partes = texto.split(".")
+            if len(partes) > 2 or len(partes[-1]) == 3:
+                texto = "".join(partes)
         elif "," in texto:
-            texto = texto.replace(",", ".")
+            partes = texto.split(",")
+            texto = "".join(partes) if len(partes[-1]) == 3 else texto.replace(",", ".")
         return float(texto)
