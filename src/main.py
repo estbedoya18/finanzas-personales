@@ -1,33 +1,25 @@
-"""Orquestador principal.
-
-Pasos:
-  1. Conecta a Gmail y trae los correos etiquetados como Transacciones que aún no han sido procesados
-  2. Por cada correo, busca el parser que aplica
-  3. Convierte el correo en Transaccion (o lo ignora si no calza ningún patrón)
-  4. Escribe las transacciones nuevas al Sheet
-  5. Marca cada correo como procesado en Gmail
-"""
+"""Orquestador: ingesta desde Gmail y aplicación de la base contable."""
 
 import logging
 import sys
 
+from .clasificacion import ClasificadorFinanciero
 from .gmail_client import GmailClient
 from .parsers import PARSERS
 from .sheets_client import SheetsClient
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 
 def procesar() -> int:
     gmail = GmailClient()
     sheets = SheetsClient()
+    sheets.preparar_estructura()
 
-    ya_existentes = sheets.ids_existentes()
+    existentes = sheets.cargar_transacciones()
+    ya_existentes = {tx.id_correo for tx in existentes}
     log.info("Sheet ya tiene %d transacciones registradas", len(ya_existentes))
 
     nuevas = []
@@ -40,52 +32,59 @@ def procesar() -> int:
             gmail.marcar_procesado(correo.id)
             continue
 
-        parser_match = None
-        for parser in PARSERS:
-            if parser.aplica(correo.asunto, correo.cuerpo, correo.remitente):
-                parser_match = parser
-                break
-
+        parser_match = next(
+            (parser for parser in PARSERS if parser.aplica(correo.asunto, correo.cuerpo, correo.remitente)),
+            None,
+        )
         if not parser_match:
             log.info("Sin parser para correo %s (asunto: %r)", correo.id, correo.asunto[:80])
             continue
 
         try:
-            tx = parser_match.parsear(correo.id, correo.asunto, correo.cuerpo)
-        except Exception as e:
-            log.exception("Error parseando correo %s: %s", correo.id, e)
+            transaccion = parser_match.parsear(correo.id, correo.asunto, correo.cuerpo)
+        except Exception as error:
+            log.exception("Error parseando correo %s: %s", correo.id, error)
             continue
 
-        if tx is None:
-            log.info("Correo %s no es transacción procesable (parser %s lo ignoró)",
-                     correo.id, parser_match.banco)
+        if transaccion is None:
             ignorados += 1
-            gmail.marcar_procesado(correo.id)  # lo marcamos para no reintentarlo
+            gmail.marcar_procesado(correo.id)
             continue
 
-        nuevas.append(tx)
+        nuevas.append(transaccion)
         procesados_ids.append(correo.id)
-        log.info("OK: %s %s %s -> %.2f (%s)", tx.banco, tx.tipo, tx.direccion, tx.monto, tx.contraparte)
+        log.info(
+            "OK: %s %s %s -> %.2f (%s)",
+            transaccion.banco, transaccion.tipo, transaccion.direccion,
+            transaccion.monto, transaccion.contraparte,
+        )
 
-    if nuevas:
-        n = sheets.insertar(nuevas)
-        log.info("Insertadas %d transacciones nuevas en el Sheet", n)
-    else:
-        log.info("No hay transacciones nuevas")
+    todas = [*existentes, *nuevas]
+    sheets.sincronizar_cuentas_detectadas(todas)
+    clasificador = ClasificadorFinanciero(
+        sheets.obtener_cuentas_propias(),
+        sheets.obtener_reglas_categorias(),
+    )
+    clasificador.clasificar(todas)
+
+    actualizadas = sheets.actualizar_clasificaciones(existentes)
+    insertadas = sheets.insertar(nuevas)
+    log.info("Base contable: %d filas históricas actualizadas", actualizadas)
+    log.info("Insertadas %d transacciones nuevas", insertadas)
 
     for correo_id in procesados_ids:
         try:
             gmail.marcar_procesado(correo_id)
-        except Exception as e:
-            log.exception("Error marcando %s como procesado: %s", correo_id, e)
+        except Exception as error:
+            log.exception("Error marcando %s como procesado: %s", correo_id, error)
 
     log.info("Resumen: %d nuevas, %d ignoradas", len(nuevas), ignorados)
-    return len(nuevas)
+    return insertadas
 
 
 if __name__ == "__main__":
     try:
         procesar()
-    except Exception as e:
-        log.exception("Falla fatal: %s", e)
+    except Exception as error:
+        log.exception("Falla fatal: %s", error)
         sys.exit(1)
