@@ -57,6 +57,27 @@ def test_empareja_transferencia_entre_cuentas_propias():
     print("✓ transferencia interna emparejada")
 
 
+def test_transferencia_recibida_por_llave_bre_b_es_interna():
+    entrada = _tx(
+        id_correo="breb-entrada",
+        tipo="transferencia_recibida",
+        direccion="entrada",
+        cuenta="8401",
+        contraparte="Transferencia Bre-B desde la llave @mi-lulo",
+    )
+    cuentas = [
+        CuentaPropia("8401", nombre="Bancolombia principal"),
+        CuentaPropia("7353", nombre="Lulo ahorro", llaves="@mi-lulo|ahorro@correo.com"),
+    ]
+
+    ClasificadorFinanciero(cuentas, []).clasificar([entrada])
+
+    assert entrada.naturaleza == "interno"
+    assert entrada.categoria == "Transferencia interna"
+    assert entrada.cuenta_destino == "8401"
+    assert entrada.subcategoria == "Desde Lulo ahorro"
+
+
 def test_regla_categoria_y_valor_por_defecto():
     compra = _tx(
         id_correo="spotify",
@@ -93,6 +114,7 @@ def test_categoria_existente_se_conserva_como_manual():
 
 if __name__ == "__main__":
     test_empareja_transferencia_entre_cuentas_propias()
+    test_transferencia_recibida_por_llave_bre_b_es_interna()
     test_regla_categoria_y_valor_por_defecto()
     test_categoria_existente_se_conserva_como_manual()
     print("\n✅ Todos los tests de clasificación pasaron")
