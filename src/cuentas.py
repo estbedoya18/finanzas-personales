@@ -30,10 +30,14 @@ def separar_identificadores(valor: str) -> list[str]:
     return [parte.strip() for parte in _SEPARADOR.split(valor or "") if parte.strip()]
 
 
+def es_descripcion_generica(valor: str) -> bool:
+    return normalizar_identificador(valor) in _DESCRIPCIONES_GENERICAS
+
+
 def es_identificador_detectable(valor: str) -> bool:
     """Evita crear cuentas automáticas desde textos genéricos como 'Ahorros'."""
     normalizado = normalizar_identificador(valor)
-    if not normalizado or normalizado in _DESCRIPCIONES_GENERICAS:
+    if not normalizado or es_descripcion_generica(valor):
         return False
     return bool(re.search(r"\d{4,}", normalizado))
 
