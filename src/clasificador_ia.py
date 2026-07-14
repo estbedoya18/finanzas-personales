@@ -65,7 +65,7 @@ class ClasificadorIA:
                 requiere_revision=datos["requiere_revision"],
                 explicacion=datos["explicacion"],
             )
-        except (AttributeError, KeyError, TypeError, json.JSONDecodeError, Exception):
+        except Exception:
             return None
 
         if not es_clasificacion_valida(resultado.categoria, resultado.subcategoria):
