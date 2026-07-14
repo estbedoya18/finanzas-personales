@@ -35,6 +35,7 @@ def test_calcula_saldo_y_mapea_tarjeta_debito():
         ),
         CuentaPropia("7353", nombre="Lulo ahorro", tipo="cuenta_ahorros"),
         CuentaPropia("7884", nombre="Crédito", tipo="tarjeta_credito"),
+        CuentaPropia("Ahorros", nombre="Descripción genérica", tipo="cuenta"),
     ]
     iniciales = [
         SaldoInicial("8401", datetime.fromisoformat("2026-07-13T00:00:00"), 1_000_000),
@@ -59,6 +60,7 @@ def test_calcula_saldo_y_mapea_tarjeta_debito():
     assert por_cuenta["8401"].saldo_actual == 2_990_000
     assert por_cuenta["8401"].movimientos == 3
     assert por_cuenta["7353"].saldo_actual == 500_000
+    assert "Ahorros" not in por_cuenta
     assert no_mapeados == 0
 
 
