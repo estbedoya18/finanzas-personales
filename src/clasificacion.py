@@ -47,7 +47,7 @@ def _coincide(valor: str, cuenta: CuentaPropia) -> bool:
 
 
 class ClasificadorFinanciero:
-    """Aplica contabilidad determinista y usa IA solo para consumos o ingresos externos."""
+    """Aplica reglas estructurales y usa IA solo para categoría y subcategoría."""
 
     VENTANA_TRANSFERENCIA_HORAS = 48
 
@@ -76,6 +76,11 @@ class ClasificadorFinanciero:
         for transaccion in transacciones:
             if transaccion.naturaleza == "interno":
                 continue
+
+            self._asignar_naturaleza_base(transaccion)
+            self._normalizar_clasificacion_heredada(transaccion)
+            if self._aplicar_reglas_estructurales(transaccion):
+                continue
             if self._es_clasificacion_manual(transaccion):
                 continue
             if transaccion.estado_revision == "pendiente" and (
@@ -84,8 +89,6 @@ class ClasificadorFinanciero:
                 continue
             if self._aplicar_reglas(transaccion):
                 continue
-
-            self._asignar_naturaleza_base(transaccion)
             if self._puede_usar_ia(transaccion, ids_permitidos_ia) and self._aplicar_ia(transaccion):
                 continue
             self._aplicar_valores_por_defecto(transaccion)
@@ -133,7 +136,10 @@ class ClasificadorFinanciero:
         return None
 
     def _emparejar_transferencias(self, transacciones: list[Transaccion]) -> None:
-        salidas = [tx for tx in transacciones if tx.tipo == "transferencia_enviada" and tx.naturaleza == "interno"]
+        salidas = [
+            tx for tx in transacciones
+            if tx.tipo == "transferencia_enviada" and tx.naturaleza == "interno"
+        ]
         entradas = [tx for tx in transacciones if tx.tipo == "transferencia_recibida"]
 
         for salida in salidas:
@@ -164,10 +170,39 @@ class ClasificadorFinanciero:
 
     def _estan_cerca_en_tiempo(self, primera: str, segunda: str) -> bool:
         try:
-            diferencia = abs((datetime.fromisoformat(primera) - datetime.fromisoformat(segunda)).total_seconds())
+            diferencia = abs(
+                (datetime.fromisoformat(primera) - datetime.fromisoformat(segunda)).total_seconds()
+            )
         except (TypeError, ValueError):
             return True
         return diferencia / 3600 <= self.VENTANA_TRANSFERENCIA_HORAS
+
+    @staticmethod
+    def _aplicar_reglas_estructurales(tx: Transaccion) -> bool:
+        referencia = (tx.referencia or "").strip().lower()
+        if tx.naturaleza == "ingreso" and ("nómina" in referencia or "nomina" in referencia):
+            tx.asignar(
+                categoria="Ingresos",
+                subcategoria="Nómina",
+                clasificado_por="regla",
+                confianza_clasificacion="alta",
+                estado_revision="resuelto",
+                categoria_sugerida=None,
+                subcategoria_sugerida=None,
+            )
+            return True
+        return False
+
+    @staticmethod
+    def _normalizar_clasificacion_heredada(tx: Transaccion) -> None:
+        if tx.categoria == "Salario":
+            tx.asignar(
+                categoria="Ingresos",
+                subcategoria="Nómina",
+                clasificado_por="regla",
+                confianza_clasificacion="alta",
+                estado_revision="resuelto",
+            )
 
     @staticmethod
     def _es_clasificacion_manual(tx: Transaccion) -> bool:
@@ -189,10 +224,15 @@ class ClasificadorFinanciero:
             texto = self._valor_regla(regla.campo, tx)
             if not texto or not self._patron_coincide(regla.patron, texto):
                 continue
+
+            naturaleza = tx.naturaleza or self._naturaleza_base(tx)
+            if naturaleza == "pendiente" and regla.naturaleza in {"ingreso", "gasto"}:
+                naturaleza = regla.naturaleza
+
             tx.asignar(
                 categoria=regla.categoria,
                 subcategoria=regla.subcategoria,
-                naturaleza=regla.naturaleza or tx.naturaleza or self._naturaleza_base(tx),
+                naturaleza=naturaleza,
                 clasificado_por="regla",
                 confianza_clasificacion="alta",
                 estado_revision="resuelto",
@@ -250,11 +290,14 @@ class ClasificadorFinanciero:
         return True
 
     def _asignar_naturaleza_base(self, tx: Transaccion) -> None:
-        if not tx.naturaleza:
-            tx.asignar(naturaleza=self._naturaleza_base(tx))
+        tx.asignar(naturaleza=self._naturaleza_base(tx))
 
     @staticmethod
     def _naturaleza_base(tx: Transaccion) -> str:
+        if tx.direccion == "entrada":
+            return "ingreso"
+        if tx.direccion == "salida":
+            return "gasto"
         return {
             "compra": "gasto",
             "pago_qr": "gasto",
@@ -266,9 +309,17 @@ class ClasificadorFinanciero:
     def _aplicar_valores_por_defecto(self, tx: Transaccion) -> None:
         if tx.categoria:
             return
-        categoria = "Otros ingresos" if tx.naturaleza == "ingreso" else "Sin clasificar"
+        if tx.naturaleza == "ingreso":
+            tx.asignar(
+                categoria="Ingresos",
+                subcategoria="Otros ingresos",
+                clasificado_por="sistema",
+                confianza_clasificacion="sin_ia",
+                estado_revision="sin_ia",
+            )
+            return
         tx.asignar(
-            categoria=categoria,
+            categoria="Sin clasificar",
             clasificado_por="sistema",
             confianza_clasificacion="sin_ia",
             estado_revision="sin_ia",
