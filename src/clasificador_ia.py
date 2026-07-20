@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import json
+import logging
 import os
 from typing import Optional
 
@@ -14,6 +15,9 @@ except ImportError:
     OpenAI = None
 
 
+log = logging.getLogger(__name__)
+
+
 @dataclass(frozen=True)
 class ResultadoClasificacionIA:
     categoria: str
@@ -24,7 +28,7 @@ class ResultadoClasificacionIA:
 
 
 class ClasificadorIA:
-    """Pide una clasificación estructurada; nunca recibe correos completos ni identificadores de cuenta."""
+    """Pide una clasificación estructurada sin enviar correos completos ni cuentas."""
 
     MODELO_POR_DEFECTO = "gpt-5.6"
 
@@ -65,10 +69,21 @@ class ClasificadorIA:
                 requiere_revision=datos["requiere_revision"],
                 explicacion=datos["explicacion"],
             )
-        except Exception:
+        except Exception as error:
+            log.exception(
+                "Error clasificando con IA el movimiento %s: %s",
+                transaccion.id_correo,
+                error,
+            )
             return None
 
         if not es_clasificacion_valida(resultado.categoria, resultado.subcategoria):
+            log.error(
+                "La IA devolvió una clasificación fuera del catálogo para %s: %s / %s",
+                transaccion.id_correo,
+                resultado.categoria,
+                resultado.subcategoria,
+            )
             return None
         return resultado
 
