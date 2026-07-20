@@ -272,26 +272,49 @@ class SheetsClient:
         return f"https://docs.google.com/spreadsheets/d/{os.environ['SHEET_ID']}/edit#gid={hoja.id}"
 
     def actualizar_clasificaciones(self, transacciones: Iterable[Transaccion]) -> int:
+        """Actualiza por encabezado para tolerar columnas heredadas intermedias."""
+        encabezados = self.hoja.row_values(1)
+        posiciones = {nombre: indice + 1 for indice, nombre in enumerate(encabezados)}
+        campos = [
+            "categoria", "naturaleza", "subcategoria", "cuenta_destino",
+            "transferencia_id", "clasificado_por", "confianza_clasificacion",
+            "estado_revision", "categoria_sugerida", "subcategoria_sugerida",
+            "explicacion_clasificacion",
+        ]
         cambios = []
+        actualizadas = 0
+
         for tx in transacciones:
             if not tx.fila_sheet or not tx.requiere_actualizacion:
                 continue
-            cambios.extend([
-                {"range": f"J{tx.fila_sheet}", "values": [[tx.categoria or ""]]},
-                {"range": f"M{tx.fila_sheet}:V{tx.fila_sheet}", "values": [[
-                    tx.naturaleza or "", tx.subcategoria or "", tx.cuenta_destino or "",
-                    tx.transferencia_id or "", tx.clasificado_por or "",
-                    tx.confianza_clasificacion or "", tx.estado_revision or "",
-                    tx.categoria_sugerida or "", tx.subcategoria_sugerida or "",
-                    tx.explicacion_clasificacion or "",
-                ]]},
-            ])
+            for campo in campos:
+                columna = posiciones.get(campo)
+                if columna is None:
+                    continue
+                cambios.append({
+                    "range": f"{self._columna(columna)}{tx.fila_sheet}",
+                    "values": [[getattr(tx, campo) or ""]],
+                })
+            actualizadas += 1
+
         if cambios:
             self.hoja.batch_update(cambios, value_input_option="USER_ENTERED")
-        return len(cambios) // 2
+        return actualizadas
 
     def insertar(self, transacciones: Iterable[Transaccion]) -> int:
-        filas = [tx.to_row() for tx in transacciones]
+        """Inserta según el orden real de encabezados de la hoja."""
+        encabezados = self.hoja.row_values(1)
+        campos_modelo = set(Transaccion.encabezados())
+        filas = []
+        for tx in transacciones:
+            fila = []
+            for encabezado in encabezados:
+                if encabezado not in campos_modelo:
+                    fila.append("")
+                    continue
+                valor = getattr(tx, encabezado)
+                fila.append("" if valor is None else valor)
+            filas.append(fila)
         if not filas:
             return 0
         self.hoja.append_rows(filas, value_input_option="USER_ENTERED")
