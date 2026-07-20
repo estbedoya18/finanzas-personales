@@ -7,6 +7,7 @@ import sys
 from .clasificacion import ClasificadorFinanciero
 from .clasificador_ia import ClasificadorIA
 from .gmail_client import GmailClient
+from .migracion_historico import migrar_clasificaciones_desplazadas
 from .notificador_telegram import NotificadorTelegram
 from .parsers import PARSERS
 from .saldos import CalculadorSaldos
@@ -26,6 +27,10 @@ def procesar() -> int:
     gmail = GmailClient()
     sheets = SheetsClient()
     sheets.preparar_estructura()
+    migradas = migrar_clasificaciones_desplazadas(sheets.hoja)
+    if migradas:
+        log.info("Migración histórica: %d filas realineadas", migradas)
+
     saldos_sheets = SaldosSheets(sheets.spreadsheet)
     saldos_sheets.preparar_estructura()
 
