@@ -8,6 +8,7 @@ Maneja:
 Ignora explícitamente: pagos PSE fallidos, ofertas de crédito, OTPs, marketing.
 """
 
+from html import unescape
 import re
 from typing import Optional
 
@@ -31,7 +32,10 @@ class LuloParser(ParserBase):
     RE_RECIBO_BRE_B = re.compile(r"Recibiste\s+(\$[\d.,]+)\s+de\s+(.+?)$", re.IGNORECASE | re.MULTILINE)
     RE_PAGO_PSE = re.compile(r"Hiciste un pago a\s+(.+?)\s+por\s+(\$[\d.,]+)", re.IGNORECASE)
 
-    RE_CUENTA_ORIGEN = re.compile(r"Origen\s*cuenta\s*[•·\-]\s*(\d+)", re.IGNORECASE)
+    RE_CUENTA_ORIGEN = re.compile(
+        r"(?:Origen\s*cuenta|tu\s*cuenta)\s*[•·\-]\s*(\d+)",
+        re.IGNORECASE,
+    )
     RE_LLAVE = re.compile(r"Llave\s*[•·\-]\s*(\S+)", re.IGNORECASE)
     RE_ID_TRANSACCION = re.compile(r"ID\.?\s*transacci[oó]n\s*[•·\-]\s*(\d+)", re.IGNORECASE)
     RE_COMPROBANTE = re.compile(r"No\.?\s*comprobante\s+(\d+)", re.IGNORECASE)
@@ -57,6 +61,7 @@ class LuloParser(ParserBase):
             return None
 
     def parsear(self, id_correo: str, asunto: str, cuerpo: str) -> Optional[Transaccion]:
+        cuerpo = unescape(cuerpo)
         asunto_l = asunto.lower()
         fecha_hora = self._extraer_fecha_hora(cuerpo)
         m_cuenta = self.RE_CUENTA_ORIGEN.search(cuerpo)
