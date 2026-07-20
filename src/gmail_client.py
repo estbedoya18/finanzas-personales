@@ -179,10 +179,6 @@ class GmailClient:
         return (
             self.service.users()
             .messages()
-            . """Consulta un correo completo por su identificador."""
-        return (
-            self.service.users()
-            .messages()
             .get(
                 userId="me",
                 id=id_correo,
