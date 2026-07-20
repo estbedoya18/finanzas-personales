@@ -20,16 +20,13 @@ class LuloParser(ParserBase):
     banco = "Lulo"
     remitente = "notificaciones@lulobank.com"
 
-    # Lista blanca de asuntos: solo estos son transacciones reales que afectan el balance.
-    # NOTA: "Pago PSE fallido" se excluye porque no se movió plata.
     ASUNTOS_VALIDOS = (
         "envío con bre-b exitoso",
-        "envio con bre-b exitoso",   # por si llega sin tilde
+        "envio con bre-b exitoso",
         "recibiste plata por bre-b",
         "pago pse exitoso",
     )
 
-    # Patrones de extracción
     RE_DEST_BRE_B = re.compile(r"Realizaste una transferencia a\s+(.+?)\s+por\s+(\$[\d.,]+)", re.IGNORECASE)
     RE_RECIBO_BRE_B = re.compile(r"Recibiste\s+(\$[\d.,]+)\s+de\s+(.+?)$", re.IGNORECASE | re.MULTILINE)
     RE_PAGO_PSE = re.compile(r"Hiciste un pago a\s+(.+?)\s+por\s+(\$[\d.,]+)", re.IGNORECASE)
@@ -62,12 +59,12 @@ class LuloParser(ParserBase):
     def parsear(self, id_correo: str, asunto: str, cuerpo: str) -> Optional[Transaccion]:
         asunto_l = asunto.lower()
         fecha_hora = self._extraer_fecha_hora(cuerpo)
-        cuenta = (self.RE_CUENTA_ORIGEN.search(cuerpo) or [None, ""])[1] if self.RE_CUENTA_ORIGEN.search(cuerpo) else ""
         m_cuenta = self.RE_CUENTA_ORIGEN.search(cuerpo)
         cuenta = m_cuenta.group(1) if m_cuenta else ""
 
-        # --- Envío con Bre-B ---
-        if "bre-b exitoso" in asunto_l and "envío" in asunto_l or "envio" in asunto_l:
+        if "bre-b exitoso" in asunto_l and (
+            "envío" in asunto_l or "envio" in asunto_l
+        ):
             if m := self.RE_DEST_BRE_B.search(cuerpo):
                 beneficiario, monto_s = m.groups()
                 m_llave = self.RE_LLAVE.search(cuerpo)
@@ -85,7 +82,6 @@ class LuloParser(ParserBase):
                     descripcion_raw=cuerpo[:500],
                 )
 
-        # --- Recibo por Bre-B ---
         if "recibiste plata por bre-b" in asunto_l:
             if m := self.RE_RECIBO_BRE_B.search(cuerpo):
                 monto_s, remitente_p = m.groups()
@@ -101,7 +97,6 @@ class LuloParser(ParserBase):
                     descripcion_raw=cuerpo[:500],
                 )
 
-        # --- Pago PSE exitoso ---
         if "pago pse exitoso" in asunto_l:
             if m := self.RE_PAGO_PSE.search(cuerpo):
                 comercio, monto_s = m.groups()
