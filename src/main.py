@@ -10,6 +10,7 @@ from .gmail_client import GmailClient
 from .migracion_historico import migrar_clasificaciones_desplazadas
 from .notificador_telegram import NotificadorTelegram
 from .parsers import PARSERS
+from .planificacion_sheets import PlanificacionSheets
 from .saldos import CalculadorSaldos
 from .saldos_sheets import SaldosSheets
 from .sheets_client import SheetsClient
@@ -27,6 +28,9 @@ def procesar() -> int:
     gmail = GmailClient()
     sheets = SheetsClient()
     sheets.preparar_estructura()
+    planificacion = PlanificacionSheets(sheets.spreadsheet)
+    planificacion.preparar_estructura()
+
     migradas = migrar_clasificaciones_desplazadas(sheets.hoja)
     if migradas:
         log.info("Migración histórica: %d filas realineadas", migradas)
@@ -39,7 +43,17 @@ def procesar() -> int:
     ya_existentes = {tx.id_correo for tx in existentes}
     log.info("Sheet ya tiene %d transacciones registradas", len(ya_existentes))
 
-    nuevas = []
+    manuales = [
+        tx for tx in planificacion.cargar_movimientos_manuales()
+        if tx.id_correo not in ya_existentes
+    ]
+    ids_manuales = {
+        tx.id_correo.split(":", 2)[1]
+        for tx in manuales
+        if tx.id_correo.startswith("manual:") and ":" in tx.id_correo
+    }
+
+    nuevas_gmail = []
     procesados_ids = []
     ignorados = 0
 
@@ -67,14 +81,16 @@ def procesar() -> int:
             gmail.marcar_procesado(correo.id)
             continue
 
-        nuevas.append(transaccion)
+        nuevas_gmail.append(transaccion)
         procesados_ids.append(correo.id)
         log.info("OK: %s %.2f (%s)", transaccion.tipo, transaccion.monto, transaccion.contraparte)
 
+    nuevas = [*manuales, *nuevas_gmail]
     todas = [*existentes, *nuevas]
     sheets.sincronizar_cuentas_detectadas(todas)
     cuentas = sheets.obtener_cuentas_propias()
     saldos_sheets.sincronizar_cuentas(cuentas)
+
     ids_permitidos_ia = {tx.id_correo for tx in nuevas}
     if _reclasificar_historico():
         ids_permitidos_ia.update(
@@ -111,6 +127,10 @@ def procesar() -> int:
         movimientos_no_mapeados,
     )
 
+    if ids_manuales:
+        marcados = planificacion.marcar_procesados(ids_manuales)
+        log.info("Movimientos manuales procesados: %d", marcados)
+
     if pendientes_nuevas:
         enviado = NotificadorTelegram().notificar_pendientes(
             pendientes_nuevas, sheets.enlace_pendientes(),
@@ -118,8 +138,8 @@ def procesar() -> int:
         log.info("Aviso Telegram de pendientes: %s", "enviado" if enviado else "no configurado")
 
     log.info(
-        "Base contable: %d históricas actualizadas, %d nuevas, %d reglas aprendidas, %d ignoradas",
-        actualizadas, insertadas, aprendidas, ignorados,
+        "Base contable: %d históricas actualizadas, %d nuevas Gmail, %d manuales, %d reglas aprendidas, %d ignoradas",
+        actualizadas, len(nuevas_gmail), len(manuales), aprendidas, ignorados,
     )
 
     for correo_id in procesados_ids:
