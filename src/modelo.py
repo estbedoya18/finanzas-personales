@@ -45,7 +45,11 @@ class Transaccion:
                     self.requiere_actualizacion = True
 
     def to_row(self) -> list:
-        return [getattr(self, encabezado) or "" for encabezado in self.encabezados()]
+        fila = []
+        for encabezado in self.encabezados():
+            valor = getattr(self, encabezado)
+            fila.append("" if valor is None else valor)
+        return fila
 
     @staticmethod
     def encabezados() -> list:
