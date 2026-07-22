@@ -319,8 +319,15 @@ class ClasificadorFinanciero:
             )
             return
         tx.asignar(
-            categoria="Sin clasificar",
+            categoria="Pendiente de revisar",
+            subcategoria=None,
             clasificado_por="sistema",
             confianza_clasificacion="sin_ia",
-            estado_revision="sin_ia",
+            estado_revision="pendiente",
+            categoria_sugerida=None,
+            subcategoria_sugerida=None,
+            explicacion_clasificacion=(
+                "No se encontró una regla de clasificación y la IA no estuvo disponible "
+                "o no pudo clasificar el movimiento."
+            ),
         )
