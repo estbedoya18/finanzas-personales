@@ -101,6 +101,25 @@ def test_regla_categoria_y_valor_por_defecto():
     print("✓ categoría por regla")
 
 
+def test_gasto_sin_regla_y_sin_ia_queda_pendiente():
+    transferencia = _tx(
+        id_correo="externa-sin-regla",
+        tipo="transferencia_enviada",
+        contraparte="cuenta *3164538803",
+        referencia="3164538803",
+        descripcion_raw="Transferencia a cuenta externa",
+    )
+
+    ClasificadorFinanciero([], []).clasificar([transferencia])
+
+    assert transferencia.naturaleza == "gasto"
+    assert transferencia.categoria == "Pendiente de revisar"
+    assert transferencia.clasificado_por == "sistema"
+    assert transferencia.confianza_clasificacion == "sin_ia"
+    assert transferencia.estado_revision == "pendiente"
+    assert transferencia.explicacion_clasificacion
+
+
 def test_categoria_existente_se_conserva_como_manual():
     compra = _tx(categoria="Mascotas", contraparte="PET SHOP")
     regla = ReglaCategoria(patron="PET", categoria="Otro", prioridad=1)
@@ -116,5 +135,6 @@ if __name__ == "__main__":
     test_empareja_transferencia_entre_cuentas_propias()
     test_transferencia_recibida_por_llave_bre_b_es_interna()
     test_regla_categoria_y_valor_por_defecto()
+    test_gasto_sin_regla_y_sin_ia_queda_pendiente()
     test_categoria_existente_se_conserva_como_manual()
     print("\n✅ Todos los tests de clasificación pasaron")
