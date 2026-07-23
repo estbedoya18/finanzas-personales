@@ -77,3 +77,45 @@ def test_ignora_movimientos_anteriores_al_corte():
 
     assert saldos[0].saldo_actual == 100_000
     assert saldos[0].movimientos == 0
+
+
+def test_contabiliza_horas_de_un_digito_desde_google_sheets():
+    cuentas = [
+        CuentaPropia("8401", nombre="Bancolombia", tipo="cuenta_ahorros"),
+        CuentaPropia(
+            "2913", nombre="Débito 2913",
+            tipo="tarjeta_debito", cuenta_asociada="8401",
+        ),
+    ]
+    inicial = SaldoInicial(
+        "8401", datetime.fromisoformat("2026-07-20T00:00:00"), 100_000,
+    )
+    movimientos = [
+        _tx(
+            id_correo="transferencia-15000",
+            fecha_hora="2026-07-21 7:34:00",
+            tipo="transferencia_enviada",
+            monto=15_000,
+            cuenta="8401",
+        ),
+        _tx(
+            id_correo="compra-12600",
+            fecha_hora="2026-07-22 7:55:00",
+            monto=12_600,
+            cuenta="2913",
+        ),
+        _tx(
+            id_correo="compra-12700",
+            fecha_hora="2026-07-22 20:27:00",
+            monto=12_700,
+            cuenta="2913",
+        ),
+    ]
+
+    saldos, no_mapeados = CalculadorSaldos(cuentas, [inicial]).calcular(movimientos)
+
+    assert saldos[0].salidas == 40_300
+    assert saldos[0].saldo_actual == 59_700
+    assert saldos[0].movimientos == 3
+    assert saldos[0].ultima_transaccion == "2026-07-22 20:27:00"
+    assert no_mapeados == 0
