@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+import re
 from typing import Iterable, Optional
 
 from .clasificacion import CuentaPropia
@@ -96,7 +97,8 @@ class CalculadorSaldos:
                 continue
 
             resultado.movimientos += 1
-            if tx.fecha_hora > resultado.ultima_transaccion:
+            ultima_fecha = self._fecha(resultado.ultima_transaccion)
+            if ultima_fecha is None or fecha > ultima_fecha:
                 resultado.ultima_transaccion = tx.fecha_hora
 
         return list(resultados.values()), no_mapeados
@@ -154,8 +156,14 @@ class CalculadorSaldos:
 
     @staticmethod
     def _fecha(valor: str) -> Optional[datetime]:
+        texto = str(valor or "").strip().replace("Z", "+00:00")
+        texto = re.sub(
+            r"^(\d{4}-\d{2}-\d{2}[ T])(\d):",
+            r"\g<1>0\2:",
+            texto,
+        )
         try:
-            fecha = datetime.fromisoformat((valor or "").replace("Z", "+00:00"))
+            fecha = datetime.fromisoformat(texto)
         except (TypeError, ValueError):
             return None
         return fecha.replace(tzinfo=None)
