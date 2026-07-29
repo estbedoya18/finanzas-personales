@@ -57,3 +57,26 @@ def test_gasto_en_efectivo_es_salida_real():
     assert tx.tipo == "compra"
     assert tx.categoria == "Alimentación"
     assert tx.origen == "manual"
+
+
+def test_movimiento_manual_con_monto_invalido_no_detiene_el_proceso():
+    movimientos = PlanificacionSheets.normalizar_movimientos_manuales([
+        {
+            "id_movimiento": "monto-invalido",
+            "fecha_hora": "2026-07-28T10:00:00",
+            "tipo": "gasto_efectivo",
+            "monto": "1989-10-19 00:00:00",
+            "estado": "confirmado",
+        },
+        {
+            "id_movimiento": "monto-valido",
+            "fecha_hora": "2026-07-28T11:00:00",
+            "tipo": "gasto_efectivo",
+            "monto": 25000,
+            "estado": "confirmado",
+        },
+    ])
+
+    assert len(movimientos) == 1
+    assert movimientos[0].id_correo == "manual:monto-valido"
+    assert movimientos[0].monto == 25000
