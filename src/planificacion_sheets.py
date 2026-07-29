@@ -1,12 +1,16 @@
 """Hojas auxiliares para presupuesto, metas y movimientos manuales."""
 
 from datetime import datetime
+import logging
 from typing import Iterable
 
 import gspread
+from gspread.utils import DateTimeOption, ValueRenderOption
 
 from .modelo import Transaccion
 
+
+log = logging.getLogger(__name__)
 
 HOJA_PRESUPUESTOS = "presupuestos"
 HOJA_METAS = "metas_ahorro"
@@ -54,7 +58,22 @@ class PlanificacionSheets:
         self._asegurar_cuenta_efectivo()
 
     def cargar_movimientos_manuales(self) -> list[Transaccion]:
-        filas = self.spreadsheet.worksheet(HOJA_MOVIMIENTOS_MANUALES).get_all_records()
+        hoja = self.spreadsheet.worksheet(HOJA_MOVIMIENTOS_MANUALES)
+        valores = hoja.get_values(
+            value_render_option=ValueRenderOption.unformatted,
+            date_time_render_option=DateTimeOption.formatted_string,
+        )
+        if len(valores) < 2:
+            return []
+
+        encabezados = [str(valor).strip() for valor in valores[0]]
+        filas = []
+        for valores_fila in valores[1:]:
+            filas.append({
+                encabezado: valores_fila[indice] if indice < len(valores_fila) else ""
+                for indice, encabezado in enumerate(encabezados)
+                if encabezado
+            })
         return self.normalizar_movimientos_manuales(filas)
 
     @staticmethod
@@ -71,7 +90,22 @@ class PlanificacionSheets:
 
             tipo = str(fila.get("tipo", "")).strip().lower()
             fecha = str(fila.get("fecha_hora", "")).strip()
-            monto = PlanificacionSheets._monto(fila.get("monto", 0))
+            try:
+                monto = PlanificacionSheets._monto(fila.get("monto", 0))
+            except (TypeError, ValueError):
+                log.warning(
+                    "Movimiento manual %s ignorado: monto inválido %r",
+                    identificador,
+                    fila.get("monto"),
+                )
+                continue
+            if monto <= 0:
+                log.warning(
+                    "Movimiento manual %s ignorado: el monto debe ser mayor que cero",
+                    identificador,
+                )
+                continue
+
             cuenta = str(fila.get("cuenta", "")).strip()
             destino = str(fila.get("cuenta_destino", "")).strip()
             categoria = str(fila.get("categoria", "")).strip() or None
