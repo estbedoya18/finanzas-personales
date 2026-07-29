@@ -28,12 +28,27 @@ class LuloParser(ParserBase):
         "pago pse exitoso",
     )
 
-    RE_DEST_BRE_B = re.compile(r"Realizaste una transferencia a\s+(.+?)\s+por\s+(\$[\d.,]+)", re.IGNORECASE)
-    RE_RECIBO_BRE_B = re.compile(r"Recibiste\s+(\$[\d.,]+)\s+de\s+(.+?)$", re.IGNORECASE | re.MULTILINE)
-    RE_PAGO_PSE = re.compile(r"Hiciste un pago a\s+(.+?)\s+por\s+(\$[\d.,]+)", re.IGNORECASE)
+    RE_DEST_BRE_B = re.compile(
+        r"Realizaste una transferencia a\s+(.+?)\s+por\s+(\$[\d.,]+)",
+        re.IGNORECASE,
+    )
+    RE_RECIBO_BRE_B = re.compile(
+        r"Recibiste\s+(\$[\d.,]+)\s+de\s+(.+?)"
+        r"(?=\s+Origen\s+cuenta|\s+Destino\s+(?:ahorro|cuenta)|"
+        r"\s+ID\.?\s*transacci[oó]n|\s+Fecha\s+|\s+Hora\s+|$)",
+        re.IGNORECASE,
+    )
+    RE_PAGO_PSE = re.compile(
+        r"Hiciste un pago a\s+(.+?)\s+por\s+(\$[\d.,]+)",
+        re.IGNORECASE,
+    )
 
     RE_CUENTA_ORIGEN = re.compile(
         r"(?:Origen\s*cuenta|tu\s*cuenta)\s*[•·\-]\s*(\d+)",
+        re.IGNORECASE,
+    )
+    RE_CUENTA_DESTINO = re.compile(
+        r"Destino\s+(?:ahorro|cuenta)\s*[•·\-]\s*(\d+)",
         re.IGNORECASE,
     )
     RE_LLAVE = re.compile(r"Llave\s*[•·\-]\s*(\S+)", re.IGNORECASE)
@@ -64,8 +79,10 @@ class LuloParser(ParserBase):
         cuerpo = unescape(cuerpo)
         asunto_l = asunto.lower()
         fecha_hora = self._extraer_fecha_hora(cuerpo)
-        m_cuenta = self.RE_CUENTA_ORIGEN.search(cuerpo)
-        cuenta = m_cuenta.group(1) if m_cuenta else ""
+        m_origen = self.RE_CUENTA_ORIGEN.search(cuerpo)
+        m_destino = self.RE_CUENTA_DESTINO.search(cuerpo)
+        cuenta_origen = m_origen.group(1) if m_origen else ""
+        cuenta_destino = m_destino.group(1) if m_destino else ""
 
         if "bre-b exitoso" in asunto_l and (
             "envío" in asunto_l or "envio" in asunto_l
@@ -81,7 +98,7 @@ class LuloParser(ParserBase):
                     tipo="transferencia_enviada",
                     monto=normalizar_monto(monto_s),
                     direccion="salida",
-                    cuenta=cuenta,
+                    cuenta=cuenta_origen,
                     contraparte=beneficiario.strip(),
                     referencia=(m_llave.group(1) if m_llave else None) or (m_id.group(1) if m_id else None),
                     descripcion_raw=cuerpo[:500],
@@ -90,6 +107,7 @@ class LuloParser(ParserBase):
         if "recibiste plata por bre-b" in asunto_l:
             if m := self.RE_RECIBO_BRE_B.search(cuerpo):
                 monto_s, remitente_p = m.groups()
+                m_id = self.RE_ID_TRANSACCION.search(cuerpo)
                 return Transaccion(
                     id_correo=id_correo,
                     fecha_hora=fecha_hora or "",
@@ -97,8 +115,9 @@ class LuloParser(ParserBase):
                     tipo="transferencia_recibida",
                     monto=normalizar_monto(monto_s),
                     direccion="entrada",
-                    cuenta=cuenta,
+                    cuenta=cuenta_destino,
                     contraparte=remitente_p.strip(),
+                    referencia=cuenta_origen or (m_id.group(1) if m_id else None),
                     descripcion_raw=cuerpo[:500],
                 )
 
@@ -113,7 +132,7 @@ class LuloParser(ParserBase):
                     tipo="pago_pse",
                     monto=normalizar_monto(monto_s),
                     direccion="salida",
-                    cuenta=cuenta,
+                    cuenta=cuenta_origen,
                     contraparte=comercio.strip(),
                     referencia=m_comp.group(1) if m_comp else None,
                     descripcion_raw=cuerpo[:500],
