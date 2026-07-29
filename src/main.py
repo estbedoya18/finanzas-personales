@@ -7,7 +7,10 @@ import sys
 from .clasificacion import ClasificadorFinanciero
 from .clasificador_ia import ClasificadorIA
 from .gmail_client import GmailClient
-from .migracion_historico import migrar_clasificaciones_desplazadas
+from .migracion_historico import (
+    migrar_clasificaciones_desplazadas,
+    migrar_cuentas_lulo_recibidas,
+)
 from .notificador_telegram import NotificadorTelegram
 from .parsers import PARSERS
 from .planificacion_sheets import PlanificacionSheets
@@ -34,6 +37,13 @@ def procesar() -> int:
     migradas = migrar_clasificaciones_desplazadas(sheets.hoja)
     if migradas:
         log.info("Migración histórica: %d filas realineadas", migradas)
+
+    lulo_migradas = migrar_cuentas_lulo_recibidas(sheets.hoja)
+    if lulo_migradas:
+        log.info(
+            "Migración Lulo: %d entradas reasignadas a la cuenta destino",
+            lulo_migradas,
+        )
 
     saldos_sheets = SaldosSheets(sheets.spreadsheet)
     saldos_sheets.preparar_estructura()
