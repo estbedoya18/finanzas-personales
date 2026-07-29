@@ -26,16 +26,16 @@ def _tx(**cambios) -> Transaccion:
 def test_calcula_saldo_y_mapea_tarjeta_debito():
     cuentas = [
         CuentaPropia(
-            "8401", nombre="Bancolombia operativa",
+            "8401", banco="Bancolombia", nombre="Bancolombia operativa",
             tipo="cuenta_ahorros", cuenta_asociada="",
         ),
         CuentaPropia(
-            "2913", nombre="Débito 2913",
+            "2913", banco="Bancolombia", nombre="Débito 2913",
             tipo="tarjeta_debito", cuenta_asociada="8401",
         ),
-        CuentaPropia("7353", nombre="Lulo ahorro", tipo="cuenta_ahorros"),
-        CuentaPropia("7884", nombre="Crédito", tipo="tarjeta_credito"),
-        CuentaPropia("Ahorros", nombre="Descripción genérica", tipo="cuenta"),
+        CuentaPropia("7353", banco="Lulo Bank", nombre="Lulo ahorro", tipo="cuenta_ahorros"),
+        CuentaPropia("7884", banco="Bancolombia", nombre="Crédito", tipo="tarjeta_credito"),
+        CuentaPropia("Ahorros", banco="Bancolombia", nombre="Descripción genérica", tipo="cuenta"),
     ]
     iniciales = [
         SaldoInicial("8401", datetime.fromisoformat("2026-07-13T00:00:00"), 1_000_000),
@@ -65,7 +65,7 @@ def test_calcula_saldo_y_mapea_tarjeta_debito():
 
 
 def test_ignora_movimientos_anteriores_al_corte():
-    cuenta = CuentaPropia("8401", tipo="cuenta_ahorros")
+    cuenta = CuentaPropia("8401", banco="Bancolombia", tipo="cuenta_ahorros")
     inicial = SaldoInicial(
         "8401", datetime.fromisoformat("2026-07-13T12:00:00"), 100_000,
     )
@@ -81,9 +81,9 @@ def test_ignora_movimientos_anteriores_al_corte():
 
 def test_contabiliza_horas_de_un_digito_desde_google_sheets():
     cuentas = [
-        CuentaPropia("8401", nombre="Bancolombia", tipo="cuenta_ahorros"),
+        CuentaPropia("8401", banco="Bancolombia", nombre="Bancolombia", tipo="cuenta_ahorros"),
         CuentaPropia(
-            "2913", nombre="Débito 2913",
+            "2913", banco="Bancolombia", nombre="Débito 2913",
             tipo="tarjeta_debito", cuenta_asociada="8401",
         ),
     ]
@@ -118,4 +118,32 @@ def test_contabiliza_horas_de_un_digito_desde_google_sheets():
     assert saldos[0].saldo_actual == 59_700
     assert saldos[0].movimientos == 3
     assert saldos[0].ultima_transaccion == "2026-07-22 20:27:00"
+    assert no_mapeados == 0
+
+
+def test_mapea_nomina_con_cuenta_generica_al_unico_deposito_del_banco():
+    cuentas = [
+        CuentaPropia("8401", banco="Bancolombia", tipo="cuenta_ahorros"),
+        CuentaPropia("7353", banco="Lulo Bank", tipo="cuenta_ahorros"),
+    ]
+    iniciales = [
+        SaldoInicial("8401", datetime(2026, 7, 20), 0),
+        SaldoInicial("7353", datetime(2026, 7, 20), 60_338),
+    ]
+    nomina = _tx(
+        id_correo="nomina-generica",
+        fecha_hora="2026-07-28T12:06:00",
+        banco="Bancolombia",
+        tipo="transferencia_recibida",
+        direccion="entrada",
+        cuenta="Ahorros",
+        monto=2_322_754,
+    )
+
+    saldos, no_mapeados = CalculadorSaldos(cuentas, iniciales).calcular([nomina])
+    por_cuenta = {saldo.cuenta: saldo for saldo in saldos}
+
+    assert por_cuenta["8401"].entradas == 2_322_754
+    assert por_cuenta["8401"].saldo_actual == 2_322_754
+    assert por_cuenta["7353"].saldo_actual == 60_338
     assert no_mapeados == 0

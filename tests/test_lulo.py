@@ -1,4 +1,4 @@
-"""Test del parser de Lulo con el correo real de muestra."""
+"""Test del parser de Lulo con correos reales de muestra."""
 
 import sys
 from pathlib import Path
@@ -37,6 +37,28 @@ Hora 3:44 a.m.
     print("✓ envío Bre-B Lulo")
 
 
+def test_recibo_breb_usa_cuenta_destino():
+    asunto = "Recibiste plata por Bre-B"
+    cuerpo = """Conoce el detalle de la transacción
+Recibiste $1,114,000 de ESTEBAN BEDOYA MARTINEZ
+Origen cuenta • 8401
+Destino ahorro • 7353
+ID. transacción • 147936915
+Fecha 28 de julio de 2026
+Hora 12:21 p.m.
+"""
+
+    tx = parser.parsear("lulo-recibida", asunto, cuerpo)
+
+    assert tx is not None
+    assert tx.tipo == "transferencia_recibida"
+    assert tx.direccion == "entrada"
+    assert tx.monto == 1_114_000
+    assert tx.cuenta == "7353"
+    assert tx.referencia == "8401"
+    assert tx.contraparte == "ESTEBAN BEDOYA MARTINEZ"
+
+
 def test_ignora_pse_fallido():
     """Un pago PSE fallido NO debe procesarse como transacción."""
     asunto = "Pago PSE fallido"
@@ -63,6 +85,7 @@ def test_ignora_credito_aprobado():
 
 if __name__ == "__main__":
     test_envio_breB()
+    test_recibo_breb_usa_cuenta_destino()
     test_ignora_pse_fallido()
     test_ignora_verificacion()
     test_ignora_credito_aprobado()

@@ -1,5 +1,6 @@
-"""Migracion idempotente para clasificaciones historicas desplazadas en Sheets."""
+"""Migraciones idempotentes para transacciones históricas en Google Sheets."""
 
+import re
 from typing import Any
 
 
@@ -18,6 +19,21 @@ CAMPOS_DESPLAZADOS = [
     "explicacion_clasificacion",
 ]
 
+_RE_LULO_DESTINO = re.compile(
+    r"Destino\s+(?:ahorro|cuenta)\s*[•·\-]\s*(\d+)",
+    re.IGNORECASE,
+)
+_RE_LULO_ORIGEN = re.compile(
+    r"Origen\s+cuenta\s*[•·\-]\s*(\d+)",
+    re.IGNORECASE,
+)
+_RE_LULO_REMITENTE = re.compile(
+    r"Recibiste\s+\$[\d.,]+\s+de\s+(.+?)"
+    r"(?=\s+Origen\s+cuenta|\s+Destino\s+(?:ahorro|cuenta)|"
+    r"\s+ID\.?\s*transacci[oó]n|\s+Fecha\s+|\s+Hora\s+|$)",
+    re.IGNORECASE,
+)
+
 
 def _columna(numero: int) -> str:
     resultado = ""
@@ -28,15 +44,7 @@ def _columna(numero: int) -> str:
 
 
 def migrar_clasificaciones_desplazadas(hoja: Any) -> int:
-    """Realinea filas antiguas afectadas por la columna ``enviado_telegram``.
-
-    Las versiones anteriores escribian la fila por posicion y no contemplaban esa
-    columna heredada. Como consecuencia, desde ``subcategoria`` todos los valores
-    quedaron una columna a la izquierda. La firma segura de una fila afectada es
-    que ``transferencia_id`` contiene realmente el origen de clasificacion.
-
-    La operacion es idempotente: una fila ya corregida no vuelve a modificarse.
-    """
+    """Realinea filas antiguas afectadas por la columna ``enviado_telegram``."""
     valores = hoja.get_all_values()
     if len(valores) < 2:
         return 0
@@ -46,8 +54,6 @@ def migrar_clasificaciones_desplazadas(hoja: Any) -> int:
     if any(campo not in posiciones for campo in CAMPOS_DESPLAZADOS):
         return 0
 
-    indice_transferencia = posiciones["transferencia_id"]
-    indice_clasificador = posiciones["clasificado_por"]
     cambios = []
     migradas = 0
 
@@ -83,6 +89,70 @@ def migrar_clasificaciones_desplazadas(hoja: Any) -> int:
                 "values": [[nuevo_valor]],
             })
         migradas += 1
+
+    if cambios:
+        hoja.batch_update(cambios, value_input_option="USER_ENTERED")
+    return migradas
+
+
+def migrar_cuentas_lulo_recibidas(hoja: Any) -> int:
+    """Corrige entradas de Lulo guardadas con la cuenta de origen.
+
+    Los correos reales incluyen ambos campos, por ejemplo ``Origen cuenta • 8401``
+    y ``Destino ahorro • 7353``. Versiones anteriores usaban siempre el origen como
+    cuenta del movimiento, por lo que la entrada se acreditaba a Bancolombia en vez
+    de Lulo. La migración usa exclusivamente el destino explícito del correo y es
+    idempotente.
+    """
+    valores = hoja.get_all_values()
+    if len(valores) < 2:
+        return 0
+
+    encabezados = valores[0]
+    posiciones = {nombre: indice for indice, nombre in enumerate(encabezados)}
+    requeridos = {
+        "banco", "tipo", "cuenta", "contraparte", "referencia", "descripcion_raw",
+    }
+    if not requeridos.issubset(posiciones):
+        return 0
+
+    cambios = []
+    migradas = 0
+
+    for numero_fila, fila in enumerate(valores[1:], start=2):
+        def valor(nombre: str) -> str:
+            indice = posiciones[nombre]
+            return fila[indice] if indice < len(fila) else ""
+
+        if not valor("banco").strip().lower().startswith("lulo"):
+            continue
+        if valor("tipo").strip().lower() != "transferencia_recibida":
+            continue
+
+        descripcion = valor("descripcion_raw")
+        destino = _RE_LULO_DESTINO.search(descripcion)
+        if not destino:
+            continue
+
+        nuevos = {"cuenta": destino.group(1)}
+        if origen := _RE_LULO_ORIGEN.search(descripcion):
+            nuevos["referencia"] = origen.group(1)
+        if remitente := _RE_LULO_REMITENTE.search(descripcion):
+            nuevos["contraparte"] = remitente.group(1).strip()
+
+        cambios_fila = 0
+        for campo, nuevo_valor in nuevos.items():
+            if valor(campo).strip() == nuevo_valor:
+                continue
+            columna = posiciones[campo] + 1
+            cambios.append({
+                "range": f"{_columna(columna)}{numero_fila}",
+                "values": [[nuevo_valor]],
+            })
+            cambios_fila += 1
+
+        if cambios_fila:
+            migradas += 1
 
     if cambios:
         hoja.batch_update(cambios, value_input_option="USER_ENTERED")

@@ -6,7 +6,11 @@ import re
 from typing import Iterable, Optional
 
 from .clasificacion import CuentaPropia
-from .cuentas import coincide_identificador, es_descripcion_generica
+from .cuentas import (
+    coincide_identificador,
+    es_descripcion_generica,
+    normalizar_identificador,
+)
 from .modelo import Transaccion
 
 
@@ -73,7 +77,7 @@ class CalculadorSaldos:
         no_mapeados = 0
 
         for tx in transacciones:
-            cuenta = self._cuenta_contable(tx.cuenta)
+            cuenta = self._cuenta_contable(tx)
             if cuenta is None:
                 if not self._es_credito(tx.cuenta):
                     no_mapeados += 1
@@ -124,7 +128,8 @@ class CalculadorSaldos:
             )
         return resultados
 
-    def _cuenta_contable(self, identificador: str) -> Optional[CuentaPropia]:
+    def _cuenta_contable(self, tx: Transaccion) -> Optional[CuentaPropia]:
+        identificador = tx.cuenta or ""
         instrumento = next(
             (
                 cuenta for cuenta in self.cuentas
@@ -132,6 +137,18 @@ class CalculadorSaldos:
             ),
             None,
         )
+
+        if instrumento is None and (
+            not str(identificador).strip() or es_descripcion_generica(identificador)
+        ):
+            candidatas = [
+                cuenta for cuenta in self.cuentas
+                if es_cuenta_con_saldo(cuenta)
+                and self._mismo_banco(tx.banco, cuenta.banco)
+            ]
+            if len(candidatas) == 1:
+                instrumento = candidatas[0]
+
         if instrumento is None:
             return None
         if es_cuenta_con_saldo(instrumento):
@@ -146,6 +163,14 @@ class CalculadorSaldos:
                 None,
             )
         return None
+
+    @staticmethod
+    def _mismo_banco(banco_tx: str, banco_cuenta: str) -> bool:
+        primero = normalizar_identificador(banco_tx)
+        segundo = normalizar_identificador(banco_cuenta)
+        return bool(primero and segundo) and (
+            primero == segundo or primero in segundo or segundo in primero
+        )
 
     def _es_credito(self, identificador: str) -> bool:
         return any(
